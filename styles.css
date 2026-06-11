@@ -1,0 +1,123 @@
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  background: #f5f6f8;
+  color: #202124;
+}
+
+.screen { display: none; min-height: 100dvh; }
+.screen.active { display: flex; flex-direction: column; }
+
+.app-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: #1a73e8; color: #fff;
+}
+.app-header h1 { font-size: 18px; font-weight: 600; }
+.icon-btn { background: none; border: none; font-size: 20px; cursor: pointer; }
+.header-btns { display: flex; gap: 14px; }
+
+.home-body, .category-body, .proposal-body, .browser-body, .settings-body, .preview-body {
+  flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 20px; max-width: 560px; width: 100%; margin: 0 auto;
+}
+.home-body { justify-content: center; align-items: stretch; }
+.home-status { text-align: center; color: #5f6368; font-size: 13px; white-space: pre-line; }
+
+.big-btn {
+  display: block; width: 100%; padding: 18px; font-size: 18px; font-weight: 600;
+  color: #fff; background: #1a73e8; border: none; border-radius: 14px; cursor: pointer;
+}
+.big-btn:active { background: #1557b0; }
+.sub-btn {
+  display: block; width: 100%; padding: 12px; font-size: 15px;
+  color: #1a73e8; background: #fff; border: 1px solid #dadce0; border-radius: 10px; cursor: pointer;
+}
+.btn-row { display: flex; gap: 10px; }
+.btn-row .sub-btn { flex: 1; }
+
+.cat-btn { font-size: 20px; padding: 26px; }
+
+/* カメラ */
+.camera-wrap { position: relative; flex: 1; background: #000; display: flex; flex-direction: column; }
+#camera-canvas { flex: 1; width: 100%; object-fit: contain; }
+.camera-hint {
+  position: absolute; top: 12px; left: 0; right: 0; text-align: center;
+  color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.camera-controls {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, rgba(0,0,0,.6));
+}
+.camera-controls .sub-btn { width: auto; padding: 10px 14px; background: rgba(255,255,255,.9); }
+.shutter-btn {
+  width: 70px; height: 70px; border-radius: 50%; border: 5px solid #fff;
+  background: rgba(255,255,255,.35); cursor: pointer;
+}
+.shutter-btn:active { background: #fff; }
+.page-count { color: #fff; font-size: 15px; min-width: 60px; text-align: right; }
+
+/* プレビュー: モード切替 */
+.mode-row { display: flex; gap: 8px; }
+.mode-btn {
+  flex: 1; padding: 10px 4px; font-size: 13px; border-radius: 10px; cursor: pointer;
+  border: 1px solid #dadce0; background: #fff; color: #444;
+}
+.mode-btn.active { background: #1a73e8; border-color: #1a73e8; color: #fff; font-weight: 600; }
+
+/* プレビュー */
+#preview-img {
+  width: 100%; max-height: 55dvh; object-fit: contain;
+  background: #fff; border: 1px solid #dadce0; border-radius: 8px;
+}
+.note { font-size: 13px; color: #5f6368; }
+
+/* 解析中 */
+.processing-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.spinner {
+  width: 48px; height: 48px; border: 5px solid #dadce0; border-top-color: #1a73e8;
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 提案 */
+.field-label { font-size: 13px; color: #5f6368; margin-bottom: -8px; }
+.text-input {
+  width: 100%; padding: 12px; font-size: 15px; border: 1px solid #dadce0; border-radius: 10px; background: #fff;
+}
+.folder-display {
+  padding: 12px; background: #e8f0fe; border-radius: 10px; font-size: 14px;
+  word-break: break-all; color: #174ea6; font-weight: 600; white-space: pre-line;
+}
+.folder-display.new-folder { background: #fce8e6; color: #c5221f; }
+.reason { font-size: 13px; color: #5f6368; background: #fff; border-radius: 10px; padding: 12px; border: 1px solid #eee; }
+#proposal-alternatives { display: flex; flex-direction: column; gap: 8px; }
+.alt-btn {
+  text-align: left; padding: 10px 12px; font-size: 13px; background: #fff;
+  border: 1px dashed #dadce0; border-radius: 10px; color: #444; cursor: pointer; word-break: break-all;
+}
+.alt-btn::before { content: "↪️ "; }
+
+/* ブラウザ */
+.browser-path {
+  font-size: 13px; background: #e8f0fe; color: #174ea6; padding: 10px 12px;
+  border-radius: 10px; word-break: break-all; font-weight: 600;
+}
+.folder-list { list-style: none; flex: 1; overflow-y: auto; background: #fff; border-radius: 10px; border: 1px solid #eee; }
+.folder-list li {
+  padding: 14px 14px; border-bottom: 1px solid #f0f0f0; cursor: pointer; font-size: 15px;
+  display: flex; align-items: center; gap: 8px;
+}
+.folder-list li:active { background: #e8f0fe; }
+.folder-list .empty { color: #9aa0a6; cursor: default; }
+
+/* 完了 */
+.done-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; }
+.done-icon { font-size: 64px; }
+#done-detail { text-align: center; font-size: 14px; color: #5f6368; word-break: break-all; white-space: pre-line; }
+.done-body .big-btn { max-width: 320px; }
+
+/* 設定 */
+.dropbox-status { font-size: 13px; color: #5f6368; }
+.dropbox-status.connected { color: #188038; font-weight: 600; }

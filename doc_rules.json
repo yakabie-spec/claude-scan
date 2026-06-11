@@ -1,0 +1,132 @@
+{
+  "version": "1.0",
+  "updated": "2026-06-10",
+  "description": "書類スキャンアプリ用のファイル命名・振り分けルール。2026-06-10 時点の Dropbox 実構成を解析して作成。",
+  "normalization": {
+    "unicode": "NFC",
+    "note": "Dropbox API は NFC 正規化されたパスのみ受け付ける。濁点分離（NFD）のままアップロードしない。"
+  },
+  "naming": {
+    "file_template": "{date} {title}.{ext}",
+    "date_format": "YYYY-MM-DD",
+    "separator": "半角スペース（日付とタイトルの間）",
+    "title_language": "日本語可。全角記号（・、（）、〜）もそのまま使用する",
+    "important_prefix": "★",
+    "examples": [
+      "2026-04-18 京都市固定資産税納付書.pdf",
+      "2026-05-18 提出書類.pdf",
+      "★260331-令和8年度・変形労働時間制勤務時間.pdf"
+    ],
+    "legacy_formats_do_not_use": [
+      "YYYY.MM.DD. タイトル（旧形式・2018年頃まで）",
+      "YYMMDD タイトル（例: 260402 進路指導部会）",
+      "YYYY-MM-DD HH.MM.SS.pdf（Scanner Pro の無加工出力。リネーム対象）"
+    ]
+  },
+  "folder_naming": {
+    "work_year_archive": {
+      "template": "{西暦}年度 {元号略}{元号年2桁}　{学年}",
+      "note": "元号年と学年の間は全角スペース（U+3000）。元号略は H（平成）/ R（令和）",
+      "examples": ["2024年度 R06　高3", "2025年度 R07　高3", "2016年度 H28　中2"]
+    },
+    "tax_year": {
+      "template": "令和{NN}年分 確定申告",
+      "note": "年は2桁ゼロ埋め（令和01〜）。平成期は「平成{NN}年分 確定申告」",
+      "examples": ["令和08年分 確定申告", "平成30年分 確定申告"]
+    },
+    "project_folder": {
+      "template": "{YYYY-MM-DD} {案件名}",
+      "note": "私的案件（投資関係など）はイベント単位で日付プレフィックス付きフォルダを作る",
+      "examples": ["2026-05-14 書類取得", "2026-05-06 ストック家賃対応"]
+    },
+    "theme_prefix": {
+      "note": "/01 Private 直下の大テーマは「◼️」（U+25FC U+FE0F）、◼️投資関係 配下の主要テーマは「■」（U+25A0）を付ける",
+      "examples": ["◼️確定申告", "◼️投資関係", "■アパマン問題", "■株式投資"]
+    }
+  },
+  "inbox": {
+    "scan_raw_folders": [
+      "/整理フォルダ/Scans",
+      "/整理フォルダ/ScannerPro",
+      "/整理フォルダ/SharpScan"
+    ],
+    "work_inbox": "/00 仕事/00 Temporary",
+    "private_inbox": "/01 Private/Temporary",
+    "fallback": "/整理フォルダ/Scans"
+  },
+  "work_categories": {
+    "base": "/00 仕事",
+    "note": "当年度は /00 仕事 直下の番号付きカテゴリに置き、年度末に /00 仕事/過去の資料検索/{年度フォルダ}/ へ同じカテゴリ構成のままアーカイブする",
+    "archive_base": "/00 仕事/過去の資料検索",
+    "categories": [
+      "01 分掌関係",
+      "02 英語科関係",
+      "03 英語演習",
+      "04 学年関係",
+      "05 部活動関係",
+      "06 その他",
+      "参照・重要資料"
+    ]
+  },
+  "routes": [
+    {
+      "id": "tax",
+      "keywords": ["確定申告", "固定資産税", "住民税", "都民税", "納税", "納付書", "源泉徴収", "年末調整", "税務署"],
+      "destination": "/01 Private/◼️確定申告/令和{NN}年分 確定申告",
+      "note": "{NN} はスキャン日が属する年分（2桁ゼロ埋め）"
+    },
+    {
+      "id": "investment",
+      "keywords": ["スルガ銀行", "アパマン", "査定", "弁護団", "融資", "売買契約", "重要事項説明", "管理委託", "家賃"],
+      "destination": "/01 Private/◼️投資関係/■アパマン問題",
+      "note": "案件単位の「YYYY-MM-DD 案件名」フォルダ内に保存。該当案件がなければ新規作成"
+    },
+    {
+      "id": "company",
+      "keywords": ["リブタス", "合同会社", "登記", "法人", "年金機構"],
+      "destination": "/01 Private/◼️合同会社リブタス（2018年8月21日設立）"
+    },
+    {
+      "id": "work_shunin",
+      "keywords": ["分掌", "教務", "進路指導", "入試"],
+      "destination": "/00 仕事/01 分掌関係"
+    },
+    {
+      "id": "work_english_dept",
+      "keywords": ["英語科"],
+      "destination": "/00 仕事/02 英語科関係"
+    },
+    {
+      "id": "work_english_practice",
+      "keywords": ["英語演習", "小テスト", "採点", "模範解答"],
+      "destination": "/00 仕事/03 英語演習"
+    },
+    {
+      "id": "work_grade",
+      "keywords": ["学年", "通知表", "修学旅行", "保護者"],
+      "destination": "/00 仕事/04 学年関係"
+    },
+    {
+      "id": "work_club",
+      "keywords": ["部活", "合宿", "大会"],
+      "destination": "/00 仕事/05 部活動関係"
+    },
+    {
+      "id": "work_misc",
+      "keywords": ["研修", "勤務時間", "マニュアル", "職場環境"],
+      "destination": "/00 仕事/06 その他"
+    },
+    {
+      "id": "work_unsorted",
+      "keywords": [],
+      "condition": "仕事関連だがカテゴリ不明",
+      "destination": "/00 仕事/00 Temporary"
+    },
+    {
+      "id": "fallback",
+      "keywords": [],
+      "condition": "分類不能",
+      "destination": "/整理フォルダ/Scans"
+    }
+  ]
+}

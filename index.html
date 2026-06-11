@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a73e8">
+<title>書類スキャン</title>
+<link rel="stylesheet" href="styles.css">
+<script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="window.__cvLoaded=true"></script>
+<script src="https://cdn.jsdelivr.net/gh/ColonelParrot/jscanify@master/src/jscanify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ホーム -->
+<section id="screen-home" class="screen active">
+  <header class="app-header">
+    <h1>📄 書類スキャン</h1>
+    <button class="icon-btn" data-action="open-settings">⚙️</button>
+  </header>
+  <div class="home-body">
+    <p class="home-status" id="home-status"></p>
+    <button id="btn-scan" class="big-btn">📷 スキャン開始</button>
+    <button id="btn-scan-file" class="sub-btn">🖼 カメラアプリ / 写真から選ぶ</button>
+    <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+  </div>
+</section>
+
+<!-- カメラ -->
+<section id="screen-camera" class="screen">
+  <div class="camera-wrap">
+    <video id="video" playsinline autoplay muted hidden></video>
+    <canvas id="camera-canvas"></canvas>
+    <div class="camera-hint">書類全体を枠内に収めてください（輪郭を自動検出します）</div>
+    <div class="camera-controls">
+      <button class="sub-btn" data-action="cancel-camera">キャンセル</button>
+      <button id="btn-shutter" class="shutter-btn"></button>
+      <span class="page-count" id="camera-page-count"></span>
+    </div>
+  </div>
+</section>
+
+<!-- プレビュー -->
+<section id="screen-preview" class="screen">
+  <header class="app-header">
+    <h1>プレビュー</h1>
+    <button class="icon-btn" data-action="abort-to-home">🏠</button>
+  </header>
+  <div class="preview-body">
+    <img id="preview-img" alt="スキャン結果">
+    <div class="mode-row">
+      <button class="mode-btn active" data-mode="document">📄 書類</button>
+      <button class="mode-btn" data-mode="whiteboard">🖥 ホワイトボード</button>
+      <button class="mode-btn" data-mode="photo">🖼 写真</button>
+    </div>
+    <p class="note" id="preview-note"></p>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="retake">↩️ 撮り直す</button>
+      <button class="sub-btn" data-action="add-page">＋ ページ追加</button>
+    </div>
+    <button class="big-btn" data-action="to-category">次へ（カテゴリ選択）</button>
+  </div>
+</section>
+
+<!-- カテゴリ選択 -->
+<section id="screen-category" class="screen">
+  <header class="app-header">
+    <h1>保存先カテゴリ</h1>
+    <div class="header-btns">
+      <button class="icon-btn" data-action="abort-to-home">🏠</button>
+      <button class="icon-btn" data-action="open-settings">⚙️</button>
+    </div>
+  </header>
+  <div class="category-body">
+    <p>この書類はどちらに保存しますか？</p>
+    <button class="big-btn cat-btn" data-category="/00 仕事">💼 00 仕事</button>
+    <button class="big-btn cat-btn" data-category="/01 Private">🏠 01 Private</button>
+    <button class="sub-btn" data-action="back-preview">戻る</button>
+  </div>
+</section>
+
+<!-- 解析中 -->
+<section id="screen-processing" class="screen">
+  <div class="processing-body">
+    <div class="spinner"></div>
+    <p id="processing-status">解析中...</p>
+  </div>
+</section>
+
+<!-- 提案 -->
+<section id="screen-proposal" class="screen">
+  <header class="app-header">
+    <h1>保存内容の確認</h1>
+    <button class="icon-btn" data-action="open-settings">⚙️</button>
+  </header>
+  <div class="proposal-body">
+    <label class="field-label">ファイル名（編集可）</label>
+    <input type="text" id="proposal-filename" class="text-input">
+    <label class="field-label">保存先フォルダ</label>
+    <div id="proposal-folder" class="folder-display"></div>
+    <p class="reason" id="proposal-reason"></p>
+    <div id="proposal-alternatives"></div>
+    <button class="big-btn" data-action="approve-save">✅ 承認して保存</button>
+    <button class="sub-btn" data-action="change-folder">📁 フォルダを変更する</button>
+    <button class="sub-btn" data-action="cancel-all">キャンセル</button>
+  </div>
+</section>
+
+<!-- フォルダブラウザ -->
+<section id="screen-browser" class="screen">
+  <header class="app-header"><h1>フォルダを選択</h1></header>
+  <div class="browser-body">
+    <div class="browser-path" id="browser-path"></div>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="browser-up">⬆️ 上の階層へ</button>
+      <button class="sub-btn" data-action="browser-new">＋ 新規フォルダ</button>
+    </div>
+    <ul id="browser-list" class="folder-list"></ul>
+    <button class="big-btn" data-action="browser-choose">このフォルダに保存する</button>
+    <button class="sub-btn" data-action="browser-back">提案画面に戻る</button>
+  </div>
+</section>
+
+<!-- 完了 -->
+<section id="screen-done" class="screen">
+  <div class="done-body">
+    <div class="done-icon">✅</div>
+    <h2>保存しました</h2>
+    <p id="done-detail"></p>
+    <button class="big-btn" data-action="go-home">ホームに戻る</button>
+  </div>
+</section>
+
+<!-- 設定 -->
+<section id="screen-settings" class="screen">
+  <header class="app-header"><h1>設定</h1></header>
+  <div class="settings-body">
+    <label class="field-label">Anthropic API キー</label>
+    <input type="password" id="setting-anthropic-key" class="text-input" placeholder="sk-ant-...">
+    <label class="field-label">Dropbox アプリキー（App Key）</label>
+    <input type="text" id="setting-dropbox-key" class="text-input" placeholder="Dropbox App Console で取得">
+    <div class="dropbox-status" id="dropbox-status"></div>
+    <button class="sub-btn" data-action="dropbox-connect">🔗 Dropbox と接続する</button>
+    <button class="big-btn" data-action="save-settings">保存</button>
+    <button class="sub-btn" data-action="close-settings">閉じる</button>
+  </div>
+</section>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
