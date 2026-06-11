@@ -22,7 +22,9 @@
     <p class="home-status" id="home-status"></p>
     <button id="btn-scan" class="big-btn">📷 スキャン開始</button>
     <button id="btn-scan-file" class="sub-btn">🖼 カメラアプリ / 写真から選ぶ</button>
+    <button class="sub-btn" data-action="open-history">📋 実施履歴</button>
     <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+    <p class="app-version">doc-scan-app v6</p>
   </div>
 </section>
 
@@ -128,6 +130,19 @@
     <h2>保存しました</h2>
     <p id="done-detail"></p>
     <button class="big-btn" data-action="go-home">ホームに戻る</button>
+  </div>
+</section>
+
+<!-- 実施履歴 -->
+<section id="screen-history" class="screen">
+  <header class="app-header">
+    <h1>実施履歴</h1>
+    <button class="icon-btn" data-action="history-home">🏠</button>
+  </header>
+  <div class="history-body">
+    <ul id="history-list" class="history-list"></ul>
+    <button class="sub-btn" data-action="history-clear">🗑 履歴を全削除</button>
+    <button class="big-btn" data-action="history-home">ホームに戻る</button>
   </div>
 </section>
 

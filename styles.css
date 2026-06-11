@@ -22,6 +22,7 @@ body {
 }
 .home-body { justify-content: center; align-items: stretch; }
 .home-status { text-align: center; color: #5f6368; font-size: 13px; white-space: pre-line; }
+.app-version { text-align: center; color: #b0b4ba; font-size: 11px; }
 
 .big-btn {
   display: block; width: 100%; padding: 18px; font-size: 18px; font-weight: 600;
@@ -117,6 +118,16 @@ body {
 .done-icon { font-size: 64px; }
 #done-detail { text-align: center; font-size: 14px; color: #5f6368; word-break: break-all; white-space: pre-line; }
 .done-body .big-btn { max-width: 320px; }
+
+/* 実施履歴 */
+.history-body { flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 20px; max-width: 560px; width: 100%; margin: 0 auto; }
+.history-list { list-style: none; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.history-list .empty { color: #9aa0a6; text-align: center; padding: 30px 0; }
+.history-item { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.history-when { font-size: 12px; color: #9aa0a6; }
+.history-name { font-size: 15px; font-weight: 600; word-break: break-all; }
+.history-path { font-size: 12px; color: #174ea6; background: #e8f0fe; border-radius: 8px; padding: 6px 8px; word-break: break-all; }
+.history-link { font-size: 13px; color: #1a73e8; text-decoration: none; }
 
 /* 設定 */
 .dropbox-status { font-size: 13px; color: #5f6368; }
