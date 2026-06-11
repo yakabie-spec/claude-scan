@@ -696,11 +696,72 @@ async function saveToDropbox() {
   try {
     const blob = await buildPdfBlob();
     const result = await dbxUpload(`${folder}/${filename}`, blob);
+    addHistory({
+      ts: new Date().toISOString(),
+      filename: result.name,
+      path: result.path_display,
+      pages: state.pages.length,
+      sizeKB: Math.round(blob.size / 1024),
+    });
     $("#done-detail").textContent = `${result.path_display}\n（${state.pages.length} ページ / ${Math.round(blob.size / 1024)} KB）`;
     showScreen("#screen-done");
   } catch (e) {
     alert(e.message);
     showScreen("#screen-proposal");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 実施履歴（localStorage に保存）
+// ---------------------------------------------------------------------------
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem("scan_history")) || []; } catch { return []; }
+}
+
+function addHistory(entry) {
+  const h = loadHistory();
+  h.unshift(entry);
+  localStorage.setItem("scan_history", JSON.stringify(h.slice(0, 200)));
+}
+
+function renderHistory() {
+  const list = $("#history-list");
+  const items = loadHistory();
+  list.innerHTML = "";
+  if (!items.length) {
+    list.innerHTML = "<li class='empty'>まだ履歴はありません</li>";
+    return;
+  }
+  for (const it of items) {
+    const li = document.createElement("li");
+    li.className = "history-item";
+    const when = new Date(it.ts).toLocaleString("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+    const folder = it.path.replace(/\/[^/]+$/, "") || "/";
+
+    const whenDiv = document.createElement("div");
+    whenDiv.className = "history-when";
+    whenDiv.textContent = `${when}・${it.pages}ページ・${it.sizeKB}KB`;
+
+    const nameDiv = document.createElement("div");
+    nameDiv.className = "history-name";
+    nameDiv.textContent = `📄 ${it.filename}`;
+
+    const pathDiv = document.createElement("div");
+    pathDiv.className = "history-path";
+    pathDiv.textContent = `📁 ${folder}`;
+
+    const link = document.createElement("a");
+    link.className = "history-link";
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Dropboxでフォルダを開く ↗";
+    link.href = "https://www.dropbox.com/home" + folder.split("/").map(encodeURIComponent).join("/");
+
+    li.append(whenDiv, nameDiv, pathDiv, link);
+    list.appendChild(li);
   }
 }
 
@@ -849,6 +910,14 @@ document.addEventListener("click", async (ev) => {
       break;
     case "browser-back": showScreen("#screen-proposal"); break;
     case "cancel-all": resetAll(); refreshHomeStatus(); showScreen("#screen-home"); break;
+    case "open-history": renderHistory(); showScreen("#screen-history"); break;
+    case "history-home": refreshHomeStatus(); showScreen("#screen-home"); break;
+    case "history-clear":
+      if (confirm("実施履歴をすべて削除しますか？（Dropbox上のファイルは削除されません）")) {
+        localStorage.removeItem("scan_history");
+        renderHistory();
+      }
+      break;
     case "abort-to-home":
       if (state.pages.length && !confirm("スキャンした画像を破棄してホームに戻りますか？")) break;
       resetAll();
