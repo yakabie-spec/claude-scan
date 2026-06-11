@@ -24,7 +24,7 @@
     <button id="btn-scan-file" class="sub-btn">🖼 カメラアプリ / 写真から選ぶ</button>
     <button class="sub-btn" data-action="open-history">📋 実施履歴</button>
     <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
-    <p class="app-version">doc-scan-app v6</p>
+    <p class="app-version">doc-scan-app v7</p>
   </div>
 </section>
 
@@ -56,11 +56,26 @@
       <button class="mode-btn" data-mode="photo">🖼 写真</button>
     </div>
     <p class="note" id="preview-note"></p>
+    <button class="sub-btn" data-action="open-adjust">✏️ 読取範囲を調整</button>
     <div class="btn-row">
       <button class="sub-btn" data-action="retake">↩️ 撮り直す</button>
       <button class="sub-btn" data-action="add-page">＋ ページ追加</button>
     </div>
     <button class="big-btn" data-action="to-category">次へ（カテゴリ選択）</button>
+  </div>
+</section>
+
+<!-- 読取範囲の手動調整 -->
+<section id="screen-adjust" class="screen">
+  <header class="app-header"><h1>読取範囲を調整</h1></header>
+  <div class="adjust-body">
+    <canvas id="adjust-canvas"></canvas>
+    <p class="note">四隅の●をドラッグして、書類の角に合わせてください</p>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="adjust-cancel">キャンセル</button>
+      <button class="sub-btn" data-action="adjust-reset">自動検出に戻す</button>
+    </div>
+    <button class="big-btn" data-action="adjust-apply">この範囲で確定</button>
   </div>
 </section>
 

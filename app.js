@@ -241,18 +241,24 @@ async function startCamera() {
       canvas.width = work.width;
       canvas.height = work.height;
       const ctx = canvas.getContext("2d");
-      const sc = getScanner();
-      if (sc) {
-        try {
-          ctx.drawImage(sc.highlightPaper(work, { color: "#34a853", thickness: 6 }), 0, 0);
-        } catch {
-          ctx.drawImage(work, 0, 0);
+      ctx.drawImage(work, 0, 0);
+      // 撮影時と同じ検出器で枠を描く（見た目と結果のズレをなくす）
+      try {
+        const c = detectDocumentCorners(work);
+        if (c) {
+          ctx.strokeStyle = "#34a853";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(c.topLeftCorner.x, c.topLeftCorner.y);
+          ctx.lineTo(c.topRightCorner.x, c.topRightCorner.y);
+          ctx.lineTo(c.bottomRightCorner.x, c.bottomRightCorner.y);
+          ctx.lineTo(c.bottomLeftCorner.x, c.bottomLeftCorner.y);
+          ctx.closePath();
+          ctx.stroke();
         }
-      } else {
-        ctx.drawImage(work, 0, 0);
-      }
+      } catch { /* 検出失敗時は枠なしで表示継続 */ }
     }
-    overlayTimer = setTimeout(loop, 180);
+    overlayTimer = setTimeout(loop, 250);
   };
   loop();
 }
@@ -301,8 +307,23 @@ function orderCorners(pts) {
   };
 }
 
-// Canny（閾値2種）＋大津の二値化の3通りで輪郭を探し、
-// 「画面の2割以上を占める凸の四角形」のうち最大のものを採用する
+// 四隅の内角（度）を返す
+function quadAngles(c) {
+  const pts = [c.topLeftCorner, c.topRightCorner, c.bottomRightCorner, c.bottomLeftCorner];
+  const angles = [];
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], a = pts[(i + 3) % 4], b = pts[(i + 1) % 4];
+    const v1 = { x: a.x - p.x, y: a.y - p.y };
+    const v2 = { x: b.x - p.x, y: b.y - p.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const n = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y) || 1;
+    angles.push((Math.acos(Math.max(-1, Math.min(1, dot / n))) * 180) / Math.PI);
+  }
+  return angles;
+}
+
+// Canny（閾値2種）＋大津の二値化＋適応的二値化の4通りで輪郭候補を集め、
+// 「面積 × 長方形らしさ」のスコアが最大で、四隅の角度が書類らしい四角形を採用する
 function detectDocumentCorners(canvas) {
   if (!cvReady()) return null;
   const cv = window.cv;
@@ -316,31 +337,25 @@ function detectDocumentCorners(canvas) {
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
     cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
 
+    const dilated = (m) => {
+      const k = cv.Mat.ones(3, 3, cv.CV_8U);
+      cv.dilate(m, m, k);
+      k.delete();
+      return m;
+    };
     const variants = [
+      () => { const m = new cv.Mat(); cv.Canny(gray, m, 50, 150); return dilated(m); },
+      () => { const m = new cv.Mat(); cv.Canny(gray, m, 25, 80); return dilated(m); },
+      () => { const m = new cv.Mat(); cv.threshold(gray, m, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU); return m; },
       () => {
+        // 照明ムラに強い適応的二値化
         const m = new cv.Mat();
-        cv.Canny(gray, m, 50, 150);
-        const k = cv.Mat.ones(3, 3, cv.CV_8U);
-        cv.dilate(m, m, k);
-        k.delete();
-        return m;
-      },
-      () => {
-        const m = new cv.Mat();
-        cv.Canny(gray, m, 25, 80);
-        const k = cv.Mat.ones(3, 3, cv.CV_8U);
-        cv.dilate(m, m, k);
-        k.delete();
-        return m;
-      },
-      () => {
-        const m = new cv.Mat();
-        cv.threshold(gray, m, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-        return m;
+        cv.adaptiveThreshold(gray, m, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 6);
+        return dilated(m);
       },
     ];
 
-    const minArea = small.width * small.height * 0.2;
+    const minArea = small.width * small.height * 0.15;
     for (const make of variants) {
       const bin = make();
       const contours = new cv.MatVector();
@@ -355,7 +370,11 @@ function detectDocumentCorners(canvas) {
           if (approx.rows === 4 && cv.isContourConvex(approx)) {
             const pts = [];
             for (let j = 0; j < 4; j++) pts.push({ x: approx.data32S[j * 2], y: approx.data32S[j * 2 + 1] });
-            candidates.push({ pts, area });
+            // 長方形らしさ: 回転外接矩形に対する面積比（1に近いほど長方形）
+            const rect = cv.minAreaRect(approx);
+            const rectArea = rect.size.width * rect.size.height;
+            const rectangularity = area / Math.max(rectArea, 1);
+            candidates.push({ pts, area, score: area * rectangularity * rectangularity });
           }
           approx.delete();
         }
@@ -372,10 +391,14 @@ function detectDocumentCorners(canvas) {
     src?.delete();
     gray?.delete();
   }
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => b.area - a.area);
-  const pts = candidates[0].pts.map((p) => ({ x: p.x * scale, y: p.y * scale }));
-  return orderCorners(pts);
+  // スコア順に見て、四隅の角度が書類らしい（50°〜130°）最初の候補を採用
+  candidates.sort((a, b) => b.score - a.score);
+  for (const cand of candidates) {
+    const corners = orderCorners(cand.pts.map((p) => ({ x: p.x * scale, y: p.y * scale })));
+    const ok = quadAngles(corners).every((deg) => deg > 50 && deg < 130);
+    if (ok) return corners;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -465,7 +488,9 @@ async function processSource(source) {
     const w = Math.round(Math.max(dist(c.topLeftCorner, c.topRightCorner), dist(c.bottomLeftCorner, c.bottomRightCorner)));
     const h = Math.round(Math.max(dist(c.topLeftCorner, c.bottomLeftCorner), dist(c.topRightCorner, c.bottomRightCorner)));
     const sc = getScanner();
-    if (sc && w > original.width * 0.3 && h > original.height * 0.3) {
+    // 自動検出は小さすぎる四角形を誤検出とみなして無視するが、手動調整はそのまま使う
+    const sane = source.manual ? w > 20 && h > 20 : w > original.width * 0.3 && h > original.height * 0.3;
+    if (sc && sane) {
       try {
         canvas = sc.extractPaper(original, w, h, c);
         cropped = true;
@@ -491,6 +516,119 @@ async function addPageFromCanvas(srcCanvas) {
   state.pageSources.push(source);
   state.pages.push(await processSource(source));
   showPreview();
+}
+
+// ---------------------------------------------------------------------------
+// 読取範囲の手動調整（四隅ドラッグ）
+// ---------------------------------------------------------------------------
+
+const adjust = { idx: -1, img: null, scale: 1, corners: [], dragging: -1 };
+
+function adjustDefaultCorners(img) {
+  const mx = img.width * 0.08, my = img.height * 0.08;
+  return orderCorners([
+    { x: mx, y: my },
+    { x: img.width - mx, y: my },
+    { x: img.width - mx, y: img.height - my },
+    { x: mx, y: img.height - my },
+  ]);
+}
+
+async function openAdjust() {
+  const idx = state.pageSources.length - 1;
+  if (idx < 0) return;
+  const source = state.pageSources[idx];
+  adjust.idx = idx;
+  adjust.img = await loadImageCanvas(source.originalDataUrl);
+  const canvas = $("#adjust-canvas");
+  const maxW = Math.min(window.innerWidth, 560) - 40;
+  const maxH = window.innerHeight * 0.55;
+  adjust.scale = Math.min(maxW / adjust.img.width, maxH / adjust.img.height);
+  canvas.width = Math.round(adjust.img.width * adjust.scale);
+  canvas.height = Math.round(adjust.img.height * adjust.scale);
+  const c = source.corners || adjustDefaultCorners(adjust.img);
+  adjust.corners = [c.topLeftCorner, c.topRightCorner, c.bottomRightCorner, c.bottomLeftCorner]
+    .map((p) => ({ x: p.x * adjust.scale, y: p.y * adjust.scale }));
+  drawAdjust();
+  showScreen("#screen-adjust");
+}
+
+function drawAdjust() {
+  const canvas = $("#adjust-canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(adjust.img, 0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#34a853";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  adjust.corners.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  ctx.closePath();
+  ctx.stroke();
+  for (const p of adjust.corners) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(52,168,83,0.35)";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#34a853";
+    ctx.fill();
+  }
+}
+
+function adjustPointerPos(ev) {
+  const canvas = $("#adjust-canvas");
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: ((ev.clientX - r.left) / r.width) * canvas.width,
+    y: ((ev.clientY - r.top) / r.height) * canvas.height,
+  };
+}
+
+function setupAdjustcanvas() {
+  const canvas = $("#adjust-canvas");
+  canvas.addEventListener("pointerdown", (ev) => {
+    const pos = adjustPointerPos(ev);
+    let best = -1, bestDist = 48;
+    adjust.corners.forEach((p, i) => {
+      const d = Math.hypot(p.x - pos.x, p.y - pos.y);
+      if (d < bestDist) { best = i; bestDist = d; }
+    });
+    adjust.dragging = best;
+    if (best >= 0) canvas.setPointerCapture(ev.pointerId);
+  });
+  canvas.addEventListener("pointermove", (ev) => {
+    if (adjust.dragging < 0) return;
+    const pos = adjustPointerPos(ev);
+    adjust.corners[adjust.dragging] = {
+      x: Math.max(0, Math.min(canvas.width, pos.x)),
+      y: Math.max(0, Math.min(canvas.height, pos.y)),
+    };
+    drawAdjust();
+  });
+  const end = () => { adjust.dragging = -1; };
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+}
+
+async function applyAdjust() {
+  const source = state.pageSources[adjust.idx];
+  source.corners = orderCorners(adjust.corners.map((p) => ({ x: p.x / adjust.scale, y: p.y / adjust.scale })));
+  source.manual = true;
+  if (source.mode === "photo") source.mode = "document"; // 範囲を切ったら切り抜きの効くモードへ
+  showScreen("#screen-preview");
+  $("#preview-note").textContent = "処理中...";
+  state.pages[adjust.idx] = await processSource(source);
+  showPreview();
+}
+
+async function resetAdjust() {
+  const source = state.pageSources[adjust.idx];
+  source.manual = false;
+  source.corners = detectDocumentCorners(adjust.img);
+  const c = source.corners || adjustDefaultCorners(adjust.img);
+  adjust.corners = [c.topLeftCorner, c.topRightCorner, c.bottomRightCorner, c.bottomLeftCorner]
+    .map((p) => ({ x: p.x * adjust.scale, y: p.y * adjust.scale }));
+  drawAdjust();
 }
 
 async function switchPageMode(mode) {
@@ -893,6 +1031,10 @@ document.addEventListener("click", async (ev) => {
       break;
     case "cancel-camera": stopCamera(); state.pages.length ? showPreview(true) : showScreen("#screen-home"); break;
     case "retake": state.pages.pop(); state.pageSources.pop(); startCamera(); break;
+    case "open-adjust": await openAdjust(); break;
+    case "adjust-apply": await applyAdjust(); break;
+    case "adjust-cancel": showScreen("#screen-preview"); break;
+    case "adjust-reset": await resetAdjust(); break;
     case "add-page": startCamera(); break;
     case "to-category": showScreen("#screen-category"); break;
     case "back-preview": showScreen("#screen-preview"); break;
@@ -942,6 +1084,7 @@ $("#file-input").addEventListener("change", (ev) => {
 
 // 起動処理
 (async function init() {
+  setupAdjustcanvas();
   await dropboxHandleRedirect();
   refreshHomeStatus();
 })();

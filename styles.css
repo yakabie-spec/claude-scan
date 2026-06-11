@@ -59,6 +59,17 @@ body {
 .shutter-btn:active { background: #fff; }
 .page-count { color: #fff; font-size: 15px; min-width: 60px; text-align: right; }
 
+/* 読取範囲の手動調整 */
+.adjust-body {
+  flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 20px;
+  max-width: 560px; width: 100%; margin: 0 auto; align-items: center;
+}
+#adjust-canvas {
+  touch-action: none; background: #000; border-radius: 8px; border: 1px solid #dadce0;
+  max-width: 100%;
+}
+.adjust-body .btn-row, .adjust-body .big-btn, .adjust-body .note { width: 100%; }
+
 /* プレビュー: モード切替 */
 .mode-row { display: flex; gap: 8px; }
 .mode-btn {
