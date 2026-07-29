@@ -2,13 +2,18 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#1a73e8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
 <title>書類スキャン</title>
 <link rel="stylesheet" href="styles.css">
-<script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="window.__cvLoaded=true"></script>
-<script src="https://cdn.jsdelivr.net/gh/ColonelParrot/jscanify@master/src/jscanify.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script async src="vendor/opencv.js" onload="window.__cvLoaded=true"></script>
+<script src="vendor/jscanify.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/ort/ort.wasm.min.js"></script>
 </head>
 <body>
 
@@ -16,15 +21,14 @@
 <section id="screen-home" class="screen active">
   <header class="app-header">
     <h1>📄 書類スキャン</h1>
-    <button class="icon-btn" data-action="open-settings">⚙️</button>
+    <button class="icon-btn" data-action="open-settings" aria-label="設定">⚙️</button>
   </header>
   <div class="home-body">
-    <p class="home-status" id="home-status"></p>
+    <div class="status-card" id="home-status"></div>
     <button id="btn-scan" class="big-btn">📷 スキャン開始</button>
     <button id="btn-scan-file" class="sub-btn">🖼 カメラアプリ / 写真から選ぶ</button>
-    <button class="sub-btn" data-action="open-history">📋 実施履歴</button>
-    <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
-    <p class="app-version">doc-scan-app v7</p>
+    <input type="file" id="file-input" accept="image/*" multiple hidden>
+    <div id="home-history" class="history-block"></div>
   </div>
 </section>
 
@@ -35,9 +39,12 @@
     <canvas id="camera-canvas"></canvas>
     <div class="camera-hint">書類全体を枠内に収めてください（輪郭を自動検出します）</div>
     <div class="camera-controls">
-      <button class="sub-btn" data-action="cancel-camera">キャンセル</button>
-      <button id="btn-shutter" class="shutter-btn"></button>
-      <span class="page-count" id="camera-page-count"></span>
+      <button class="sub-btn camera-cancel" data-action="cancel-camera">キャンセル</button>
+      <button id="btn-shutter" class="shutter-btn" aria-label="撮影"></button>
+      <div class="camera-right">
+        <button id="btn-torch" class="icon-btn torch-btn" hidden>🔦</button>
+        <span class="page-count" id="camera-page-count"></span>
+      </div>
     </div>
   </div>
 </section>
@@ -46,17 +53,24 @@
 <section id="screen-preview" class="screen">
   <header class="app-header">
     <h1>プレビュー</h1>
-    <button class="icon-btn" data-action="abort-to-home">🏠</button>
+    <button class="icon-btn" data-action="abort-to-home" aria-label="ホーム">🏠</button>
   </header>
   <div class="preview-body">
-    <img id="preview-img" alt="スキャン結果">
+    <div class="preview-img-wrap" id="preview-zoom-wrap">
+      <img id="preview-img" alt="スキャン結果" draggable="false">
+    </div>
+    <p class="note zoom-note">🔍 ピンチで拡大／ダブルタップで切替（ブレの確認ができます）</p>
+    <div id="page-thumbs" class="page-thumbs"></div>
     <div class="mode-row">
       <button class="mode-btn active" data-mode="document">📄 書類</button>
       <button class="mode-btn" data-mode="whiteboard">🖥 ホワイトボード</button>
       <button class="mode-btn" data-mode="photo">🖼 写真</button>
     </div>
-    <p class="note" id="preview-note"></p>
-    <button class="sub-btn" data-action="open-adjust">✏️ 読取範囲を調整</button>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="edit-crop">✂️ 範囲調整</button>
+      <button class="sub-btn" data-action="rotate">🔄 回転</button>
+      <button class="sub-btn" data-action="delete-page">🗑 削除</button>
+    </div>
     <div class="btn-row">
       <button class="sub-btn" data-action="retake">↩️ 撮り直す</button>
       <button class="sub-btn" data-action="add-page">＋ ページ追加</button>
@@ -65,17 +79,23 @@
   </div>
 </section>
 
-<!-- 読取範囲の手動調整 -->
-<section id="screen-adjust" class="screen">
-  <header class="app-header"><h1>読取範囲を調整</h1></header>
-  <div class="adjust-body">
-    <canvas id="adjust-canvas"></canvas>
-    <p class="note">四隅の●をドラッグして、書類の角に合わせてください</p>
-    <div class="btn-row">
-      <button class="sub-btn" data-action="adjust-cancel">キャンセル</button>
-      <button class="sub-btn" data-action="adjust-reset">自動検出に戻す</button>
+<!-- 範囲調整（四隅ドラッグ） -->
+<section id="screen-crop" class="screen">
+  <header class="app-header"><h1>範囲調整</h1></header>
+  <div class="crop-body">
+    <p class="note">四隅の●をドラッグして書類の範囲を合わせてください</p>
+    <div class="crop-canvas-wrap">
+      <canvas id="crop-canvas"></canvas>
+      <canvas id="crop-magnifier" width="120" height="120"></canvas>
     </div>
-    <button class="big-btn" data-action="adjust-apply">この範囲で確定</button>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="crop-reset">自動検出に戻す</button>
+      <button class="sub-btn" data-action="crop-full">全体を使う</button>
+    </div>
+    <div class="btn-row">
+      <button class="sub-btn" data-action="crop-cancel">キャンセル</button>
+      <button class="big-btn btn-row-main" data-action="crop-apply">✅ 適用</button>
+    </div>
   </div>
 </section>
 
@@ -84,8 +104,8 @@
   <header class="app-header">
     <h1>保存先カテゴリ</h1>
     <div class="header-btns">
-      <button class="icon-btn" data-action="abort-to-home">🏠</button>
-      <button class="icon-btn" data-action="open-settings">⚙️</button>
+      <button class="icon-btn" data-action="abort-to-home" aria-label="ホーム">🏠</button>
+      <button class="icon-btn" data-action="open-settings" aria-label="設定">⚙️</button>
     </div>
   </header>
   <div class="category-body">
@@ -101,6 +121,7 @@
   <div class="processing-body">
     <div class="spinner"></div>
     <p id="processing-status">解析中...</p>
+    <button class="sub-btn processing-cancel" data-action="processing-cancel" hidden>キャンセル</button>
   </div>
 </section>
 
@@ -108,10 +129,11 @@
 <section id="screen-proposal" class="screen">
   <header class="app-header">
     <h1>保存内容の確認</h1>
-    <button class="icon-btn" data-action="open-settings">⚙️</button>
+    <button class="icon-btn" data-action="open-settings" aria-label="設定">⚙️</button>
   </header>
   <div class="proposal-body">
-    <label class="field-label">ファイル名（編集可）</label>
+    <p class="summary-chip" id="proposal-summary"></p>
+    <label class="field-label" for="proposal-filename">ファイル名（編集可）</label>
     <input type="text" id="proposal-filename" class="text-input">
     <label class="field-label">保存先フォルダ</label>
     <div id="proposal-folder" class="folder-display"></div>
@@ -145,19 +167,7 @@
     <h2>保存しました</h2>
     <p id="done-detail"></p>
     <button class="big-btn" data-action="go-home">ホームに戻る</button>
-  </div>
-</section>
-
-<!-- 実施履歴 -->
-<section id="screen-history" class="screen">
-  <header class="app-header">
-    <h1>実施履歴</h1>
-    <button class="icon-btn" data-action="history-home">🏠</button>
-  </header>
-  <div class="history-body">
-    <ul id="history-list" class="history-list"></ul>
-    <button class="sub-btn" data-action="history-clear">🗑 履歴を全削除</button>
-    <button class="big-btn" data-action="history-home">ホームに戻る</button>
+    <button class="sub-btn" data-action="scan-again">📷 続けてスキャン</button>
   </div>
 </section>
 
@@ -165,16 +175,25 @@
 <section id="screen-settings" class="screen">
   <header class="app-header"><h1>設定</h1></header>
   <div class="settings-body">
-    <label class="field-label">Anthropic API キー</label>
-    <input type="password" id="setting-anthropic-key" class="text-input" placeholder="sk-ant-...">
-    <label class="field-label">Dropbox アプリキー（App Key）</label>
-    <input type="text" id="setting-dropbox-key" class="text-input" placeholder="Dropbox App Console で取得">
+    <label class="field-label" for="setting-anthropic-key">Anthropic API キー</label>
+    <input type="password" id="setting-anthropic-key" class="text-input" placeholder="sk-ant-..." autocomplete="off">
+    <label class="field-label" for="setting-model">解析モデル</label>
+    <select id="setting-model" class="text-input">
+      <option value="claude-opus-4-8">Claude Opus 4.8（高精度・既定）</option>
+      <option value="claude-sonnet-5">Claude Sonnet 5（高速・低コスト）</option>
+    </select>
+    <label class="field-label" for="setting-dropbox-key">Dropbox アプリキー（App Key）</label>
+    <input type="text" id="setting-dropbox-key" class="text-input" placeholder="Dropbox App Console で取得" autocomplete="off">
     <div class="dropbox-status" id="dropbox-status"></div>
     <button class="sub-btn" data-action="dropbox-connect">🔗 Dropbox と接続する</button>
+    <button class="sub-btn" data-action="clear-folder-cache">🗂 フォルダ一覧キャッシュを更新</button>
     <button class="big-btn" data-action="save-settings">保存</button>
     <button class="sub-btn" data-action="close-settings">閉じる</button>
+    <p class="note version-note" id="version-note"></p>
   </div>
 </section>
+
+<div id="toast" class="toast" hidden></div>
 
 <script type="module" src="app.js"></script>
 </body>
